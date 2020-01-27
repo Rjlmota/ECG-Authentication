@@ -88,6 +88,7 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         
         
     def segmentate(self):
+
         # armazenará as features extraídas
         
         columns_names = ['mean_q', 'mean_r', 'mean_s',
@@ -108,20 +109,32 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         # extraindo todos os segmentos possíveis com passo pré definido.
         for time_window in range(step, len(self.X), step):
             segment = self.X[time_window-step:time_window]
+
             extracted_features = self.extract_features(segment, self.sample_rate)
             
-            
             ## adiciona as features recentemente extraídas ao dataframe final.
+            if not (np.any(extracted_features)):
+                continue
             self.features_df.loc[len(self.features_df)] = extracted_features     
-        
-        
+
+
         #print(f"Generated {len(self.features_df)} original segments")        
+
+        original_segments_only = self.features_df.iloc[int(len(self.features_df)/2):]
         
+
         # 1° caso: já existem segmentos suficiente, basta escolher n segmentos aleatórios.
-        
+
         if(len(self.features_df) >= self.number_of_segments):
-            return self.features_df.sample(n=20, random_state=1)
+            correct_sized_df = self.features_df.sample(n=self.number_of_segments, random_state=1) 
+            original_sample = correct_sized_df[:int(len(self.correct_sized_df)/2)] 
+            correct_sized_df = correct_sized_df[int(len(self.correct_sized_df)/2):]
+            #print(type(correct_sized_df), type(original_sample))
+            
+            return correct_sized_df, original_sample
         
+        #remaining_data = self.features_df.iloc[:int(len(self.features_df)/2)]
+        remaining_data = pd.DataFrame(columns=columns_names)    
         
         # 2° caso: Não há segmentos suficientes, necessário gerar segmentos aleatórios
         
@@ -131,7 +144,7 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         
         
         # gera os segmentos aleatórios, e extrai as features de cada segmento desses
-        while(len(self.features_df) < self.number_of_segments):
+        while(len(remaining_data) < self.number_of_segments):
            
             #checa máximo de iterações
             if(current_attempt >= max_attempt):
@@ -141,20 +154,22 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
             random_segment = self.random_segment_generator()
             
             # extrai features do segmento aleatório
-            extracted_features = self.extract_features(random_segment, self.sample_rate)
-            
+            extracted_features = np.array(self.extract_features(random_segment, self.sample_rate))
             # adiciona um ao contador de iterações
             current_attempt += 1
             
-            # verifica se essa feature (definida )
-            if((self.features_df==np.array(extracted_features)).all(1).any()):
+
+            if not (np.any(extracted_features)):
+                continue
+            elif( (remaining_data == extracted_features).all(1).any()):
+                #print("ELIMINADO POR SER CÓPIA")
                 continue
             else:
                 # adiciona o segmento aeatório no dataframe final
-                self.features_df.loc[len(self.features_df)] = extracted_features
+                remaining_data.loc[len(remaining_data)] = extracted_features
         
-        #print(f"generated {len(self.features_df)} final segments \n\n")
-        return self.features_df   
+        return remaining_data, original_segments_only
+
         
     def get_peaks(self, segment, sample_rate):
         #obtém o valor mais alto presente no segmento.
@@ -204,7 +219,7 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
 
         peaks = self.get_peaks(segment, sample_rate)
         if(len(peaks) < 1):
-            return None
+            return np.array([])
 
         #finding difference between r times
         difference_between_r = np.diff(peaks) 
