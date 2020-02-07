@@ -195,98 +195,182 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         return peaks
         
         
-    def extract_features(self, segment, sample_rate):
-        '''
-        Extracts the peak's indexes based on a time distance based on the predefined sample rate.
-
-        If there's not enough data to get the number of segments needed, this implementation
-        will gengerate random segments from the original data
-
-        Returns:
-        features list containing the following information:
-
-        (meanQ, meanR, mmeanS, deltaR, stdevQ, stdevR, stdevS
-        qrs_interval, rr_interval, rq_amplitude) + number_of_peaks? 
-        '''
-
-        # initializing variables.
-        q_list = []
-        s_list = []
-        r_list = []
-        qrs_interval_list = []
-        rq_amplitude_list = []
-        features = []
-
-        peaks = self.get_peaks(segment, sample_rate)
-        if(len(peaks) < 1):
-            return np.array([])
-
-        #finding difference between r times
-        difference_between_r = np.diff(peaks) 
-
-        for i in range(len(difference_between_r)):
-            if difference_between_r[i] < (sample_rate*0.12):
-                #dropped due to this article Weighted Conditional Random Fields for Supervised Interpatient Heartbeat Classification
-                difference_between_r.pop(i)
-
-        if np.mean(difference_between_r) == np.nan:
-            difference_between_r = 0
-        
-        #interval in ms corresponding to each dataset's time unit
-        mean_rr_interval = np.mean(difference_between_r)*(1000.0/float(self.sample_rate)) 
-
-        for peak in peaks:
-            # this search windows surround the R peak found before by 40ms,
-            # which is enough for detecting the said features
-            step = int(sample_rate*0.040)
-            search_window = segment[peak-step:peak+step]
-            half_index = int(len(search_window)//2)
 
 
-            # finding q:
-            q_value = min(search_window[:half_index])
-            q_list.append(q_value)
-            q_instant_time = search_window[:half_index].argmin()
+    def extract_local_features(peak_x, segment, sample_rate):
+	    #y - voltage
+	    #x - time index (depends on sample rate!)
+	    
+	    features = {}
+	    
+	    #peak_y = segment[peak_x] #gets the peak value
+	    features['r_y'] = segment[peak_x]
+	    features['r_x'] = peak_x 
+	    
+	    
+	    
+	    search_window_size = int(sample_rate*0.5) # 500ms
+	    #get P_Q(x, y)
+	    
+	    #local_peaks_left = [float('-inf'), float('inf')] # [higher_peak,lower_peak]
+	    local_max = [float('-inf'), 0] # = [higher_value, index]
+	    local_min = [float('inf'), 0] # = [minimum value, index]
+	    for x in range(peak_x, (peak_x-search_window_size), -1):
+	        if (segment[x] > local_max[0]):
+	            local_max = [segment[x], x]
+	        
+	        if (segment[x] < local_min[0]):
+	            local_min = [segment[x], x]
+	    
+	    
+	    features['q_y'], features['q_x'] = local_min
+	    
+	    features['p_y'], features['p_x'] = local_max
+	    
+	    
+	    #local_peaks_left = [float('-inf'), float('inf')] # [higher_peak,lower_peak]
+	    local_max = [float('-inf'), 0] # = [higher_value, index]
+	    local_min = [float('inf'), 0] # = [minimum value, index]
+	    for x in range(peak_x, (peak_x+search_window_size)):
+	        if (segment[x] > local_max[0]):
+	            local_max = [segment[x], x]
+	        
+	        if (segment[x] < local_min[0]):
+	            local_min = [segment[x], x]
+	            
+	    
+	    features['s_y'], features['s_x'] = local_min
+	    
+	    features['t_y'], features['t_x'] = local_max
+	    
+	        
+	    time_window = int(sample_rate*0.04) #40ms
+	    
+	    
+	    features['qrs_offset_y'] = float('-inf')
+	    for x in range(features['s_x'], (features['s_x']+time_window)):
+	        value = abs(features['s_y'] - segment[x]) / abs(features['s_x'] - x)
+	        
+	        
+	        if(value > features['qrs_offset_y']):
+	            if(value not in [float('inf'), float('-inf')]):
+	                features['qrs_offset_y'] = segment[x]
+	                features['qrs_offset_x'] = x
 
+	            
+	    features['qrs_onset_y'] = float('-inf')
+	    for x in range(features['q_x'], (features['q_x']-time_window), -1):
+	        value = abs(features['q_y'] - segment[x]) / abs(features['q_x'] - x)
+	        
+	        if(value > features['qrs_onset_y']):
+	            if(value not in [float('inf'), float('-inf')]):
+	                features['qrs_onset_y'] = segment[x]
+	                features['qrs_onset_x'] = x
 
-            # finding s:
-            s_value = min(search_window[half_index:])
-            s_list.append(s_value)
-            s_instant_time = search_window[half_index:].argmin()
+	            
+	            
+	    features['qrs_interval'] = features['qrs_offset_x'] - features['qrs_onset_x']
+	    
+	    features['rq_amplitude'] = abs(segment[peak_x] - features['q_y'])
+	    
+	    features['q_t_distance'] = features['t_x'] - features['q_x']
+	    
+	    features['q_s_distance'] = features['s_x'] - features['q_x']
+	    
+	    return features
+	    
+	    
+	    
 
-            #defing qrs interval
-            single_qrs_interval = ( (s_instant_time+step) - q_instant_time) * (1000.0/float(sample_rate))
-            qrs_interval_list.append(single_qrs_interval)
+	    
+    def extract_features(segment, sample_rate):
+	    peaks  = get_peaks(segment, sample_rate)
+    
+	    if(len(peaks) < 1):
+	        return np.array([])
 
+	    #finding difference between r times
+	    difference_between_r = np.diff(peaks)
+	    
+	    
+	    for i in range(len(difference_between_r)):
+	        if difference_between_r[i] < (sample_rate*0.12):
+	            #dropped due to this article Weighted Conditional Random Fields for Supervised Interpatient Heartbeat Classification
+	            difference_between_r.pop(i)
 
-            #obtaining rq_amplitude
-            single_rq_amplitude = abs(segment[peak] - q_value)
-            rq_amplitude_list.append(single_rq_amplitude)
+	    if np.mean(difference_between_r) == np.nan:
+	        difference_between_r = 0
 
+	    #interval in ms corresponding to each dataset's time unit
+	    mean_rr_interval = np.mean(difference_between_r)*(1000.0/float(sample_rate)) 
+	    
+	    features_global = []
+	    for peak in peaks:
+	        #print(peak)
+	        features_local = (extract_local_features(peak, segment, sample_rate))
+	        features_global.append(features_local)
+	        
+	    
+	    # juntando os dicionarios de features em um único só
+	    final_features = {}
+	    for key in features_global[0].keys():
+	        final_features[key] = tuple(diict[key] for diict in features_global)
+	    
+	    # obetendo as últimas features restantes
+	    mean_q, stdev_q = np.nanmean(np.array(final_features['q_y'])), np.nanstd(np.array(final_features['q_y'])) 
+	    mean_r, stdev_r = np.nanmean(np.array(final_features['r_y'])), np.nanstd(np.array(final_features['r_y']))
+	    mean_s, stdev_s = np.nanmean(np.array(final_features['s_y'])), np.nanstd(np.array(final_features['s_y']))
+	    mean_rq_amplitude = np.nanmean(np.array(final_features['rq_amplitude'])) 
+	    
+	    mean_qt_distance = np.nanmean(np.array(final_features['q_t_distance']))#, np.nanstd(np.array(final_features['q_t_distance']))
+	    mean_qs_distance = np.nanmean(np.array(final_features['q_s_distance']))#, np.nanstd(np.array(final_features['q_s_distance']))
+	    
+	    
+	    mean_p, stdev_p = np.nanmean(np.array(final_features['p_y'])), np.nanstd(np.array(final_features['p_y']))
+	    mean_t, stdev_t = np.nanmean(np.array(final_features['t_y'])), np.nanstd(np.array(final_features['t_y']))
+	    
 
-        r_list = [segment[index] for index in peaks]
+	    
+	    mean_qrs_interval = np.nanmean(np.array(final_features['qrs_interval']))#, np.nanstd(np.array(final_features['qrs_interval']))
+	    
+		#     for feature_name in ['q', 'r', 's',]
+		#     for features in features_global:
+	        
 
-        mean_q = np.mean(q_list)
-        mean_s = np.mean(s_list)
-        mean_r = np.mean(r_list)
+	        
+	    
+	    ff = np.array([mean_q, mean_r, mean_s, stdev_q,
+	                   mean_p, mean_t,
+	                   stdev_r, stdev_s, mean_rr_interval,
+	                   mean_rq_amplitude, mean_qrs_interval, mean_qs_distance, mean_qt_distance,
+	                   mean_qt_distance, mean_qs_distance])    
+	    
+	    
+	    
+	    return ff
+	#     features = features_global[0]
+	    
+	#     plt.plot(segment[:200])
+	 
+	#     plt.annotate('Offset', xy=(features['qrs_offset_x'], features['qrs_offset_y']), xytext=(200, 0.4),
+	#         arrowprops=dict(facecolor='black', shrink=0.5),
+	#         )
+	    
+	#     plt.annotate('Onset', xy=(features['qrs_onset_x'], features['qrs_onset_y']), xytext=(1, 0.4),
+	#     arrowprops=dict(facecolor='black', shrink=0.01),
+	#     )
 
-        stdev_q = np.std(q_list)
-        stdev_s = np.std(s_list)
-        stdev_r = np.std(r_list)
-
-        mean_rq_amplitude = np.mean(rq_amplitude_list)
-        mean_qrs_interval = np.mean(qrs_interval_list)
-
-
-        diff_r = np.diff(peaks)
-        deltaR = 0 if(len(diff_r) == 0) else np.mean(diff_r)
-        
-
-        ff = np.array([mean_q, mean_r, mean_s, stdev_q,
-                stdev_r, stdev_s, mean_rr_interval,
-                mean_rq_amplitude, mean_qrs_interval])
-        
-        #print(peaks)
-        #print(ff)
-        
-        return ff
+	#     plt.annotate('Q', xy=(features['q_x'], features['q_y']), xytext=(50, -0.2),
+	#     arrowprops=dict(facecolor='black', shrink=0.05),
+	#     )
+	    
+	    
+	#     plt.annotate('S', xy=(features['s_x'], features['s_y']), xytext=(100, 0.4),
+	#     arrowprops=dict(facecolor='black', shrink=0.05),
+	#     )
+	    
+	#     print(features['qrs_offset_y'])
+	#     plt.legend()
+	#     plt.savefig("qrs_complex.png")
+	    
+	    
