@@ -350,12 +350,14 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
             
         time_window = int(sample_rate*0.04) #40ms
         
-        
+    
         features['qrs_offset_y'] = float('NaN')
+
         features['qrs_offset_x'] = float('NaN')
 
         features['qrs_onset_x'] = float('NaN')
 
+        features['qrs_onset_y'] = float('NaN')
         max_walk = (features['s_x']+time_window) if (features['s_x']+time_window) < len(segment) else len(segment)
         for x in range(features['s_x'], max_walk):
             value = abs(features['s_y'] - segment[x]) / abs(features['s_x'] - x)
