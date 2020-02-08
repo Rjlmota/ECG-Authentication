@@ -93,7 +93,7 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         columns_names = ['mean_q', 'mean_r', 'mean_s', 'mean_p', 'mean_t',
                          'stdev_q', 'stdev_r','stdev_s',
                          'mean_rr_interval', 'mean_rq_amplitude', 'mean_qrs_interval',
-                         'mean_qs_distance', 'mean_qt_distance'] # peaks number as a feature later?
+                         'mean_qs_distance', 'mean_qt_distance', 'mean_qrs_offset', 'mean_qrs_onset'] # peaks number as a feature later?
     
 
 
@@ -351,13 +351,14 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         time_window = int(sample_rate*0.04) #40ms
         
     
-        features['qrs_offset_y'] = float('NaN')
+   #     features['qrs_offset_y'] = float('NaN')
 
         features['qrs_offset_x'] = float('NaN')
 
         features['qrs_onset_x'] = float('NaN')
 
-        features['qrs_onset_y'] = float('NaN')
+        
+        features['qrs_offset_y'] = float('-inf')
         max_walk = (features['s_x']+time_window) if (features['s_x']+time_window) < len(segment) else len(segment)
         for x in range(features['s_x'], max_walk):
             value = abs(features['s_y'] - segment[x]) / abs(features['s_x'] - x)
@@ -442,6 +443,11 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         
 
         
+        mean_qrs_onset = np.nanmean(np.array(final_features['qrs_onset_y']))
+        mean_qrs_offset = np.nanmean(np.array(final_features['qrs_offset_y']))
+
+
+
         mean_qrs_interval = np.nanmean(np.array(final_features['qrs_interval']))#, np.nanstd(np.array(final_features['qrs_interval']))
         
     #     for feature_name in ['q', 'r', 's',]
@@ -453,7 +459,7 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         ff = np.array([mean_q, mean_r, mean_s, mean_p, mean_t,
                       stdev_q, stdev_r, stdev_s, 
                       mean_rr_interval, mean_rq_amplitude, mean_qrs_interval,
-                      mean_qs_distance, mean_qt_distance])     
+                      mean_qs_distance, mean_qt_distance, mean_qrs_offset, mean_qrs_onset])     
         
         
         
