@@ -379,6 +379,12 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
                     features['qrs_onset_y'] = segment[x]
                     features['qrs_onset_x'] = x
 
+
+        if(features['qrs_onset_y'] == float('-inf')):
+            features['qrs_onset_y'] = float('NaN')
+
+        if(features['qrs_offset_y'] == float('-inf')):
+            features['qrs_offset_y'] = float('NaN')
                 
                 
         features['qrs_interval'] = features['qrs_offset_x'] - features['qrs_onset_x']
