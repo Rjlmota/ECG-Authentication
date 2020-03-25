@@ -74,8 +74,8 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         
 
         
-    def random_segment_generator(self): 
-        window = self.sample_rate*2
+    def random_segment_generator(self, time_seconds=3): 
+        window = self.sample_rate*time_seconds#2
         # limit for iteration
         cap = len(self.X) - (window)-1
         
@@ -93,7 +93,11 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         columns_names = ['mean_q', 'mean_r', 'mean_s', 'mean_p', 'mean_t',
                          'stdev_q', 'stdev_r','stdev_s',
                          'mean_rr_interval', 'mean_rq_amplitude', 'mean_qrs_interval',
-                         'mean_qs_distance', 'mean_qt_distance', 'mean_qrs_offset', 'mean_qrs_onset'] # peaks number as a feature later?
+                         'mean_qs_distance', 'mean_qt_distance', 'mean_qrs_offset', 'mean_qrs_onset',
+                         'mean_p_onset', 'mean_p_offset', 'mean_t_onset', 'mean_t_offset',
+                         'mean_qt_interval', 'mean_st_interval', 'mean_t_wave', 'mean_pq_segment',
+                         'mean_st_segment', 'mean_tp_segment', 'mean_pp_interval'
+                         ] # peaks number as a feature later?
     
 
 
@@ -108,8 +112,9 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         # e extrai as features de cada segmento desses
         
         # Sample rate indicates how many data points we have for 1second of measeurement. 
-        # We want 2 seconds, so we multiply by 2.
-        step = self.sample_rate * 2 
+        # We want 2 seconds, so we multiply by the amount of seconds wanted.
+        time_seconds = 3
+        step = self.sample_rate * time_seconds 
         
         # extraindo todos os segmentos possíveis com passo pré definido.
         for time_window in range(step, len(self.X), step):
@@ -132,7 +137,7 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
 
         if(len(self.features_df) >= self.number_of_segments):
             correct_sized_df = self.features_df.sample(n=self.number_of_segments, random_state=1) 
-            print(f"I selected {len(original_sample)} samples")
+            #print(f"I selected {len(original_sample)} samples")
             return correct_sized_df
         
 
@@ -295,6 +300,47 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         
     
 
+    def find_offset(self, feature_x_position, feature_y_value, segment):
+        time_window = int(self.sample_rate*0.04) #40ms
+        offset_y_value = float('-inf')
+        
+        offset_x_position = float('NaN')
+        
+        max_walk = feature_x_position + time_window
+        if(max_walk > len(segment)):
+           max_walk = len(segment)
+           
+        for x in range(feature_x_position, max_walk):
+           candidate = abs(feature_y_value - segment[x]) / abs(feature_x_position - x)
+        
+           if(candidate > offset_y_value):
+               offset_y_value = candidate
+               offset_x_position = x
+           
+        
+        return offset_x_position
+
+
+    def find_onset(self, feature_x_position, feature_y_value, segment):
+        time_window = int(self.sample_rate*0.04) #40ms
+        onset_y_value = float('-inf')
+        
+        onset_x_position = float('NaN')
+        
+        max_walk = feature_x_position - time_window
+        if(max_walk < 0):
+           max_walk = 0
+           
+        for x in range(feature_x_position, max_walk, -1):
+           candidate = abs(feature_y_value - segment[x]) / abs(feature_x_position - x)
+        
+           if(candidate > onset_y_value):
+               onset_y_value = candidate
+               onset_x_position = x
+           
+        
+        return onset_x_position
+
 
     def extract_local_features(self, peak_x, segment, sample_rate):
         #y - voltage
@@ -325,6 +371,36 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         features['q_y'], features['q_x'] = local_min
         
         features['p_y'], features['p_x'] = local_max
+
+
+        valor_x = self.find_offset(features['p_x'], features['p_y'], segment)
+        
+
+
+        if (not np.isnan(valor_x)):
+            valor_y = segment[valor_x] 
+        else: 
+            valor_y = float('NaN')
+
+        features['p_offset_y'] = valor_y
+        features['p_offset_x'] = valor_x
+
+
+
+        valor_x = self.find_onset(features['p_x'], features['p_y'], segment)
+        
+
+
+        if (not np.isnan(valor_x)):
+            valor_y = segment[valor_x] 
+        else: 
+            valor_y = float('NaN')
+
+        features['p_onset_y'] = valor_y
+        features['p_onset_x'] = valor_x
+
+
+
         
         
         #local_peaks_left = [float('-inf'), float('inf')] # [higher_peak,lower_peak]
@@ -347,37 +423,110 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         
         features['t_y'], features['t_x'] = local_max
         
-            
-        time_window = int(sample_rate*0.04) #40ms
+
+        valor_x = self.find_offset(features['t_x'], features['t_y'], segment)
         
+
+
+        if (not np.isnan(valor_x)):
+            valor_y = segment[valor_x] 
+        else: 
+            valor_y = float('NaN')
+
+        features['t_offset_y'] = valor_y
+        features['t_offset_x'] = valor_x
+            
+        
+
+
+        valor_x = self.find_onset(features['t_x'], features['t_y'], segment)
+        
+
+
+        if (not np.isnan(valor_x)):
+            valor_y = segment[valor_x] 
+        else: 
+            valor_y = float('NaN')
+
+        features['t_onset_y'] = valor_y
+        features['t_onset_x'] = valor_x
+            
+
+
+        #time_window = int(sample_rate*0.04) #40ms
+        
+
+
+
     
    #     features['qrs_offset_y'] = float('NaN')
 
-        features['qrs_offset_x'] = float('NaN')
+        # features['qrs_offset_x'] = float('NaN')
 
-        features['qrs_onset_x'] = float('NaN')
+        # features['qrs_onset_x'] = float('NaN')
 
         
-        features['qrs_offset_y'] = float('-inf')
-        max_walk = (features['s_x']+time_window) if (features['s_x']+time_window) < len(segment) else len(segment)
-        for x in range(features['s_x'], max_walk):
-            value = abs(features['s_y'] - segment[x]) / abs(features['s_x'] - x)
+        # features['qrs_offset_y'] = float('-inf')
+        # max_walk = (features['s_x']+time_window) if (features['s_x']+time_window) < len(segment) else len(segment)
+        # for x in range(features['s_x'], max_walk):
+        #     value = abs(features['s_y'] - segment[x]) / abs(features['s_x'] - x)
             
             
-            if(value > features['qrs_offset_y']):
-                if(value not in [float('inf'), float('-inf')]):
-                    features['qrs_offset_y'] = segment[x]
-                    features['qrs_offset_x'] = x
+        #     if(value > features['qrs_offset_y']):
+        #         if(value not in [float('inf'), float('-inf')]):
+        #             features['qrs_offset_y'] = segment[x]
+        #             features['qrs_offset_x'] = x
 
                 
-        features['qrs_onset_y'] = float('-inf')
-        for x in range(features['q_x'], (features['q_x']-time_window), -1):
-            value = abs(features['q_y'] - segment[x]) / abs(features['q_x'] - x)
+        
+        # print('_________DEBUG_OFFSET:: F_Y', features['qrs_offset_y'])
+        # print('_________DEBUG_OFFSET:: F_X', features['qrs_offset_x'])
+
+        valor_x = self.find_offset(features['s_x'], features['s_y'], segment)
+        
+
+
+        if (not np.isnan(valor_x)):
+            valor_y = segment[valor_x] 
+        else: 
+            valor_y = float('NaN')
+
+        features['qrs_offset_y'] = valor_y
+        features['qrs_offset_x'] = valor_x
+
+       #print('_________DEBUG_OFFSET:: NEW_FUNCTION', valor_x, valor_y)
+
+
+        
+
+
+
+        # features['qrs_onset_y'] = float('-inf')
+        # for x in range(features['q_x'], (features['q_x']-time_window), -1):
+        #     value = abs(features['q_y'] - segment[x]) / abs(features['q_x'] - x)
             
-            if(value > features['qrs_onset_y']):
-                if(value not in [float('inf'), float('-inf')]):
-                    features['qrs_onset_y'] = segment[x]
-                    features['qrs_onset_x'] = x
+        #     if(value > features['qrs_onset_y']):
+        #         if(value not in [float('inf'), float('-inf')]):
+        #             features['qrs_onset_y'] = segment[x]
+        #             features['qrs_onset_x'] = x
+        
+        # print('_________DEBUG_ONSET:: F_Y', features['qrs_onset_y'])
+        # print('_________DEBUG_ONSET:: F_X', features['qrs_onset_x'])
+
+        #valor_x = self.find_onset(features['q_x'], features['q_y'], segment)
+        
+        if (not np.isnan(valor_x)):
+            valor_y = segment[valor_x] 
+        else:
+            valor_y = float('NaN')
+        features['qrs_onset_y'] = valor_y
+        features['qrs_onset_x'] = valor_x
+
+
+        #print('_________DEBUG_ONSET:: NEW_FUNCTION', valor_x, valor_y)
+
+        
+
 
 
         if(features['qrs_onset_y'] == float('-inf')):
@@ -391,9 +540,25 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         
         features['rq_amplitude'] = abs(segment[peak_x] - features['q_y'])
         
-        features['q_t_distance'] = features['t_x'] - features['q_x']
+        features['q_t_distance'] = abs(features['t_x'] - features['q_x'])
         
-        features['q_s_distance'] = features['s_x'] - features['q_x']
+        features['q_t_interval'] = abs(features['qrs_onset_x'] - features['t_offset_x'])
+
+
+
+
+        features['s_t_segment'] = abs(features['qrs_offset_x'] - features['t_onset_x'])
+
+        features['s_t_interval'] = abs(features['qrs_offset_x'] - features['t_offset_x'])
+
+        features['q_s_distance'] = abs(features['s_x'] - features['q_x'])
+
+        features['t_wave'] = abs(features['t_offset_x'] - features['t_onset_x'])
+
+        features['pq_segment'] = abs(features['p_offset_x'] - features['qrs_onset_x'])
+
+
+
         
         return features
         
@@ -453,9 +618,57 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         mean_qrs_offset = np.nanmean(np.array(final_features['qrs_offset_y']))
 
 
+        mean_p_onset =  np.nanmean(np.array(final_features['p_onset_y']))
+        mean_p_offset =  np.nanmean(np.array(final_features['p_offset_y']))
+
+
+        mean_t_onset = np.nanmean(np.array(final_features['t_onset_y']))
+        mean_t_offset = np.nanmean(np.array(final_features['t_offset_y']))
 
         mean_qrs_interval = np.nanmean(np.array(final_features['qrs_interval']))#, np.nanstd(np.array(final_features['qrs_interval']))
         
+
+
+
+
+        list_of_tp_segment = []
+        for i in range(len(np.array(final_features['t_offset_x']))):
+            if(i+1 < len(np.array(final_features['p_onset_x']))):
+                list_of_tp_segment.append(abs(final_features['t_offset_x'][i] - final_features['p_onset_x'][i+1]))
+
+        mean_tp_segment = np.nanmean(np.array(list_of_tp_segment)) ##NEW FEATURE
+
+
+
+
+        #mean_qt_interval, mean_st_interval, mean_t_wave, mean_pq_segment, mean_st_segment, mean_tp_segment, mean_pp_interval
+
+
+        mean_qt_interval = np.nanmean(np.array(final_features['q_t_interval'])) ## NEW FEATURE
+
+        mean_st_interval = np.nanmean(np.array(final_features['s_t_interval'])) ## NEW FEATURE
+
+        mean_t_wave = np.nanmean(np.array(final_features['t_wave'])) ## NEW FEATURE
+
+        mean_pq_segment = np.nanmean(np.array(final_features['pq_segment'])) ## NEW FEATURE
+
+
+        mean_st_segment = np.nanmean(np.array(final_features['s_t_segment'])) ## NEW FEATURE
+
+        #mean_tp_segment = np.nanmean(np.array(final_features['tp_segment'])) ## NEW FEATURE
+
+
+
+        difference_between_p =  np.diff(np.array(final_features['p_x']))
+        mean_pp_interval = np.mean(difference_between_p)*(1000.0/float(sample_rate)) ##NEW FEATURE
+
+
+
+
+
+
+
+
     #     for feature_name in ['q', 'r', 's',]
     #     for features in features_global:
             
@@ -465,7 +678,10 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         ff = np.array([mean_q, mean_r, mean_s, mean_p, mean_t,
                       stdev_q, stdev_r, stdev_s, 
                       mean_rr_interval, mean_rq_amplitude, mean_qrs_interval,
-                      mean_qs_distance, mean_qt_distance, mean_qrs_offset, mean_qrs_onset])     
+                      mean_qs_distance, mean_qt_distance, mean_qrs_offset, mean_qrs_onset,
+                      mean_p_onset, mean_p_offset, mean_t_onset, mean_t_offset,
+                      mean_qt_interval, mean_st_interval, mean_t_wave, mean_pq_segment,
+                      mean_st_segment, mean_tp_segment, mean_pp_interval])     
         
         
         
