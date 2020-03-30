@@ -179,101 +179,9 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
                 self.features_df.loc[len(self.features_df)] = extracted_features
         
 
-        print(f"I generated {len(self.features_df)} samples for training")
+        #print(f"I generated {len(self.features_df)} samples for training")
 
         return original_segments_only, self.features_df
-
-        
-    '''
-    def segmentate(self):
-
-        # armazenará as features extraídas
-        
-        columns_names = ['mean_q', 'mean_r', 'mean_s',
-                         'stdev_q', 'stdev_r','stdev_s',
-                         'mean_qrs_interval', 'mean_rr_interval',
-                         'mean_rq_amplitude'] # peaks number as a feature later?
-    
-        self.features_df = pd.DataFrame(columns=columns_names)
-        
-        
-        # pega todos os segmentos originais possíveis de se obter com os dados originais
-        # e extrai as features de cada segmento desses
-        
-        # Sample rate indicates how many data points we have for 1second of measeurement. 
-        # We want 2 seconds, so we multiply by 2.
-        step = self.sample_rate * 2 
-        
-        # extraindo todos os segmentos possíveis com passo pré definido.
-        for time_window in range(step, len(self.X), step):
-            segment = self.X[time_window-step:time_window]
-
-            extracted_features = self.extract_features(segment, self.sample_rate)
-            
-            ## adiciona as features recentemente extraídas ao dataframe final.
-            if not (np.any(extracted_features)):
-                continue
-            self.features_df.loc[len(self.features_df)] = extracted_features     
-
-
-        #print(f"Generated {len(self.features_df)} original segments")        
-
-        original_segments_only = self.features_df.iloc[int(len(self.features_df)/2):]
-        
-
-        # 1° caso: já existem segmentos suficiente, basta escolher n segmentos aleatórios.
-
-
-        if(len(self.features_df) >= self.number_of_segments):
-            correct_sized_df = self.features_df.sample(n=self.number_of_segments, random_state=1) 
-            original_sample = correct_sized_df[:int(len(correct_sized_df)/2)] 
-            correct_sized_df = correct_sized_df[int(len(correct_sized_df)/2):]
-            #print(type(correct_sized_df), type(original_sample))
-            print(f"Generated {len(original_sample)} samples for testing")
-            return correct_sized_df, original_sample
-        
-        #remaining_data = self.features_df.iloc[:int(len(self.features_df)/2)]
-        remaining_data = pd.DataFrame(columns=columns_names)    
-        
-        # 2° caso: Não há segmentos suficientes, necessário gerar segmentos aleatórios
-        
-        # variáveis de controle para impedir um loop infinito
-        max_attempt = 10_000
-        current_attempt = 0
-        
-        
-        # gera os segmentos aleatórios, e extrai as features de cada segmento desses
-        while(len(remaining_data) < self.number_of_segments):
-           
-            #checa máximo de iterações
-            if(current_attempt >= max_attempt):
-                break
-            
-            # gera o segmento aleatóprio aqui
-            random_segment = self.random_segment_generator()
-            
-            # extrai features do segmento aleatório
-            extracted_features = np.array(self.extract_features(random_segment, self.sample_rate))
-            # adiciona um ao contador de iterações
-            current_attempt += 1
-            
-
-            if not (np.any(extracted_features)):
-                continue
-            elif( (remaining_data == extracted_features).all(1).any()):
-                #print("ELIMINADO POR SER CÓPIA")
-                continue
-            else:
-                # adiciona o segmento aeatório no dataframe final
-                remaining_data.loc[len(remaining_data)] = extracted_features
-        
-
-        print(f"Generated {len(remaining_data)} samples for training")
-        print(f"Generated {len(original_segments_only)} samples for testing")
-
-        return remaining_data, original_segments_only
-
-        '''
 
     def get_peaks(self, segment, sample_rate):
         #obtém o valor mais alto presente no segmento.
@@ -453,35 +361,6 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
             
 
 
-        #time_window = int(sample_rate*0.04) #40ms
-        
-
-
-
-    
-   #     features['qrs_offset_y'] = float('NaN')
-
-        # features['qrs_offset_x'] = float('NaN')
-
-        # features['qrs_onset_x'] = float('NaN')
-
-        
-        # features['qrs_offset_y'] = float('-inf')
-        # max_walk = (features['s_x']+time_window) if (features['s_x']+time_window) < len(segment) else len(segment)
-        # for x in range(features['s_x'], max_walk):
-        #     value = abs(features['s_y'] - segment[x]) / abs(features['s_x'] - x)
-            
-            
-        #     if(value > features['qrs_offset_y']):
-        #         if(value not in [float('inf'), float('-inf')]):
-        #             features['qrs_offset_y'] = segment[x]
-        #             features['qrs_offset_x'] = x
-
-                
-        
-        # print('_________DEBUG_OFFSET:: F_Y', features['qrs_offset_y'])
-        # print('_________DEBUG_OFFSET:: F_X', features['qrs_offset_x'])
-
         valor_x = self.find_offset(features['s_x'], features['s_y'], segment)
         
 
@@ -494,38 +373,14 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         features['qrs_offset_y'] = valor_y
         features['qrs_offset_x'] = valor_x
 
-       #print('_________DEBUG_OFFSET:: NEW_FUNCTION', valor_x, valor_y)
-
-
         
 
-
-
-        # features['qrs_onset_y'] = float('-inf')
-        # for x in range(features['q_x'], (features['q_x']-time_window), -1):
-        #     value = abs(features['q_y'] - segment[x]) / abs(features['q_x'] - x)
-            
-        #     if(value > features['qrs_onset_y']):
-        #         if(value not in [float('inf'), float('-inf')]):
-        #             features['qrs_onset_y'] = segment[x]
-        #             features['qrs_onset_x'] = x
-        
-        # print('_________DEBUG_ONSET:: F_Y', features['qrs_onset_y'])
-        # print('_________DEBUG_ONSET:: F_X', features['qrs_onset_x'])
-
-        #valor_x = self.find_onset(features['q_x'], features['q_y'], segment)
-        
-        if (not np.isnan(valor_x)):
             valor_y = segment[valor_x] 
         else:
             valor_y = float('NaN')
         features['qrs_onset_y'] = valor_y
         features['qrs_onset_x'] = valor_x
 
-
-        #print('_________DEBUG_ONSET:: NEW_FUNCTION', valor_x, valor_y)
-
-        
 
 
 
@@ -641,8 +496,6 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
 
 
 
-        #mean_qt_interval, mean_st_interval, mean_t_wave, mean_pq_segment, mean_st_segment, mean_tp_segment, mean_pp_interval
-
 
         mean_qt_interval = np.nanmean(np.array(final_features['q_t_interval'])) ## NEW FEATURE
 
@@ -655,23 +508,11 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
 
         mean_st_segment = np.nanmean(np.array(final_features['s_t_segment'])) ## NEW FEATURE
 
-        #mean_tp_segment = np.nanmean(np.array(final_features['tp_segment'])) ## NEW FEATURE
-
-
 
         difference_between_p =  np.diff(np.array(final_features['p_x']))
         mean_pp_interval = np.mean(difference_between_p)*(1000.0/float(sample_rate)) ##NEW FEATURE
 
 
-
-
-
-
-
-
-    #     for feature_name in ['q', 'r', 's',]
-    #     for features in features_global:
-            
 
             
  
@@ -686,28 +527,4 @@ class FeatureExtractor(BaseEstimator, TransformerMixin):
         
         
         return ff
-    #     features = features_global[0]
-        
-    #     plt.plot(segment[:200])
-     
-    #     plt.annotate('Offset', xy=(features['qrs_offset_x'], features['qrs_offset_y']), xytext=(200, 0.4),
-    #         arrowprops=dict(facecolor='black', shrink=0.5),
-    #         )
-        
-    #     plt.annotate('Onset', xy=(features['qrs_onset_x'], features['qrs_onset_y']), xytext=(1, 0.4),
-    #     arrowprops=dict(facecolor='black', shrink=0.01),
-    #     )
-
-    #     plt.annotate('Q', xy=(features['q_x'], features['q_y']), xytext=(50, -0.2),
-    #     arrowprops=dict(facecolor='black', shrink=0.05),
-    #     )
-        
-        
-    #     plt.annotate('S', xy=(features['s_x'], features['s_y']), xytext=(100, 0.4),
-    #     arrowprops=dict(facecolor='black', shrink=0.05),
-    #     )
-        
-    #     print(features['qrs_offset_y'])
-    #     plt.legend()
-    #     plt.savefig("qrs_complex.png")
-    
+ 
